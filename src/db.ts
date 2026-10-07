@@ -31,9 +31,17 @@ const insertStmt = db.prepare(
   "insert into marks (visitor_id, name, body, created_at) values (?, ?, ?, ?)",
 );
 const listStmt = db.prepare("select * from marks order by id desc");
+const getStmt = db.prepare("select * from marks where id = ?");
+const listSinceStmt = db.prepare("select * from marks where id > ? order by id asc");
 
-export function insertMark(visitorId: string, name: string, body: string): void {
-  insertStmt.run(visitorId, name, body, new Date().toISOString());
+export function insertMark(visitorId: string, name: string, body: string): Mark {
+  const { lastInsertRowid } = insertStmt.run(visitorId, name, body, new Date().toISOString());
+  return getStmt.get(lastInsertRowid) as unknown as Mark;
+}
+
+// Oldest first, so a client prepending each one in turn ends up newest-on-top.
+export function listMarksSince(id: number): Mark[] {
+  return listSinceStmt.all(id) as unknown as Mark[];
 }
 
 export function listMarks(): Mark[] {

@@ -2,8 +2,9 @@ import { createServer, type IncomingMessage } from "node:http";
 import { readFileSync } from "node:fs";
 import { marked } from "marked";
 import { getCookie, getVisitorId, setCookie } from "./cookies.ts";
-import { escapeHtml, marksList, page } from "./render.ts";
+import { escapeHtml, liveScript, marksList, page } from "./render.ts";
 import { insertMark, listMarks } from "./db.ts";
+import { broadcast, openStream } from "./live.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const MAX_NAME = 40;
@@ -48,7 +49,8 @@ function homePage(marks: ReturnType<typeof listMarks>, visitorId: string, lastNa
   <button type="submit">Leave it</button>
 </form>
 ${marksList(marks, visitorId)}
-</main>`,
+</main>
+${liveScript}`,
   );
 }
 
@@ -71,11 +73,16 @@ const server = createServer((req, res) => {
         const name = (params.get("name") ?? "").trim().slice(0, MAX_NAME);
         const body = (params.get("body") ?? "").trim().slice(0, MAX_BODY);
         if (hasVisibleContent(name) && hasVisibleContent(body)) {
-          insertMark(visitorId, name, body);
+          broadcast(insertMark(visitorId, name, body));
           setCookie(res, "name", name);
         }
         res.writeHead(303, { Location: "/" });
         res.end();
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/events") {
+        openStream(req, res, url, visitorId);
         return;
       }
 
