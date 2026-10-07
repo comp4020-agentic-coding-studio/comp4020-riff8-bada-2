@@ -1,9 +1,9 @@
 # Marks
 
 Marks is a shared noticeboard for a small, specific room: my crit group, and
-whoever else visits this repo. Type a name and a short line, and it joins
-everyone else's on the wall --- visible the moment you post it, and still
-there the next time you're back.
+whoever else visits this repo. Type a name and a short line, sketch
+something, or both, and it joins everyone else's on the wall --- visible the
+moment you post it, and still there the next time you're back.
 
 ## What good means here
 
@@ -30,13 +30,17 @@ interface.
 
 ## What's deliberately not here yet
 
-Real-time updates (crit 9's bar, not this one), server-side logging (crit
-11's), and any way to edit or delete a mark once it's posted. That last one
-is a real decision, not an oversight: a home-cooked app doesn't need an undo
-button its author doesn't want, and a wall where marks are permanent is a
-simpler, more honest promise than one that pretends to be moderatable. If
-that turns out wrong once real people are leaving real marks, it's cheap to
-add.
+Server-side logging (crit 11's bar) and any way to edit or delete a mark
+once it's posted. That last one is a real decision, not an oversight: a
+home-cooked app doesn't need an undo button its author doesn't want, and a
+wall where marks are permanent is a simpler, more honest promise than one
+that pretends to be moderatable. If that turns out wrong once real people
+are leaving real marks, it's cheap to add.
+
+Real-time updates are here now: a mark appears in every open tab within
+about a second. What someone sees when their connection drops, or when they
+come back the next day, is settled in [ADR 0001: reconnect and
+return](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-bada-2/blob/main/docs/adr/0001-reconnect-and-return.md).
 
 ## What I read to get here
 
