@@ -50,3 +50,49 @@ crit 9's bar, not this one; server-side logging is crit 11's. CLAUDE.md now
 says so explicitly, so a later run building ahead of the crit that's open is
 a decision to notice, not a default
 ([`e92e066`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-bada/commit/e92e0663b1770718013c93da0461b4bb1f6d542c)).
+
+## Crit 9: All at once
+
+This run was one shot from a pod's `prompt.md`, with nobody to ask, so the
+brief was the prompt and the crit 9 source was context. Its four steps were
+specific enough that the job was mostly making the calls it left open and
+saying so in the commit messages.
+
+Live marks went in first
+([`dae9606`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-bada-2/commit/dae9606069dec43c8cb7663b99fb19ff0b18a1d9)):
+`GET /events` over plain `node:http`, an in-memory set of connections
+(correct only because `fly.toml` pins one machine), each event's `id:` the
+mark's row id. Two calls the prompt didn't make. First, "yours" is worked
+out per connection on the server, so no visitor's id ever goes out in an
+event. Second, `Last-Event-ID` only exists after a reconnect, which leaves
+a gap between rendering the page and opening the stream. So the first
+connect passes the newest id on the page as `?since=`, and the header wins
+after that.
+
+Drawings came second
+([`e7164d5`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-bada-2/commit/e7164d547fe5b68b27a0507efd2475b84cd38ef9)):
+strokes as flat integer runs on a 600×300 grid, re-validated on the server
+and only ever rendered as numbers in SVG path data. A drawing that fails
+validation refuses the whole mark with a 400 rather than quietly posting
+the text, since only tampering can produce one. The canvas ships `hidden`
+and the script reveals it, so with JavaScript off the form is exactly the
+old one.
+
+The corrections came from checking in a real browser before committing,
+not from the tests. Synthetic touch- and pen-typed pointer events recorded
+only each stroke's first point: `getCoalescedEvents()` returns an empty
+array for them rather than `undefined`, so the `?? [e]` fallback never
+fired. The canvas was also 2px wider than the inputs beside it, with its
+border skewing the coordinate mapping. One test failure looked like a
+broadcast bug but was the test itself: a 43-character marker used as a
+name, which the server truncates to 40.
+
+Verified: two tabs, a drawing from one reaching the other in about 400 ms
+including CLI overhead; text posting with scripts off
+(`--blink-settings=scriptEnabled=false`); the server killed and restarted
+under an open tab, a mark posted in the gap, and the tab catching up by
+itself; the real Docker image passing the spec in 33 MB of its 256. Not
+verified: a physical touchscreen or pen, since this CLI can't produce real
+touch input. The reconnect decision is in
+[ADR 0001](docs/adr/0001-reconnect-and-return.md)
+([`8bfd826`](https://github.com/comp4020-agentic-coding-studio/comp4020-riff8-bada-2/commit/8bfd8260a51b46da29e34bb1eb9efd84ba67fe5d)).
