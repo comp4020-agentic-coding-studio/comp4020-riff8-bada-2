@@ -19,23 +19,32 @@ db.exec(`
   )
 `);
 
+// Databases from before drawings existed get the column added in place;
+// existing marks keep a null drawing.
+const columns = db.prepare("pragma table_info(marks)").all() as unknown as { name: string }[];
+if (!columns.some((c) => c.name === "drawing")) {
+  db.exec("alter table marks add column drawing text");
+}
+
 export interface Mark {
   id: number;
   visitor_id: string;
   name: string;
   body: string;
   created_at: string;
+  // validated stroke JSON (see drawing.ts), or null for a text-only mark
+  drawing: string | null;
 }
 
 const insertStmt = db.prepare(
-  "insert into marks (visitor_id, name, body, created_at) values (?, ?, ?, ?)",
+  "insert into marks (visitor_id, name, body, drawing, created_at) values (?, ?, ?, ?, ?)",
 );
 const listStmt = db.prepare("select * from marks order by id desc");
 const getStmt = db.prepare("select * from marks where id = ?");
 const listSinceStmt = db.prepare("select * from marks where id > ? order by id asc");
 
-export function insertMark(visitorId: string, name: string, body: string): Mark {
-  const { lastInsertRowid } = insertStmt.run(visitorId, name, body, new Date().toISOString());
+export function insertMark(visitorId: string, name: string, body: string, drawing: string | null): Mark {
+  const { lastInsertRowid } = insertStmt.run(visitorId, name, body, drawing, new Date().toISOString());
   return getStmt.get(lastInsertRowid) as unknown as Mark;
 }
 

@@ -2,14 +2,16 @@ import { createServer, type IncomingMessage } from "node:http";
 import { readFileSync } from "node:fs";
 import { marked } from "marked";
 import { getCookie, getVisitorId, setCookie } from "./cookies.ts";
-import { escapeHtml, liveScript, marksList, page } from "./render.ts";
+import { drawField, escapeHtml, marksList, page, pageScript } from "./render.ts";
+import { parseDrawing } from "./drawing.ts";
 import { insertMark, listMarks } from "./db.ts";
 import { broadcast, openStream } from "./live.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const MAX_NAME = 40;
 const MAX_BODY = 280;
-const MAX_REQUEST_BYTES = 8192;
+// room for a full drawing (see drawing.ts) once it's form-encoded
+const MAX_REQUEST_BYTES = 65_536;
 
 // `.trim()` only strips whitespace (Unicode `Zs`), not zero-width/format
 // characters (`Cf`, e.g. U+200B) — a string made of nothing else survives
@@ -18,15 +20,16 @@ function hasVisibleContent(s: string): boolean {
   return /[^\s\p{Cf}]/u.test(s);
 }
 
-async function readBody(req: IncomingMessage): Promise<string> {
+// The body, or null if it's over MAX_REQUEST_BYTES. The rest is read and
+// dropped rather than cut off, so the client gets a clean 413.
+async function readBody(req: IncomingMessage): Promise<string | null> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req as AsyncIterable<Buffer>) {
     size += chunk.length;
-    if (size > MAX_REQUEST_BYTES) throw new Error("request body too large");
-    chunks.push(chunk);
+    if (size <= MAX_REQUEST_BYTES) chunks.push(chunk);
   }
-  return Buffer.concat(chunks).toString("utf8");
+  return size > MAX_REQUEST_BYTES ? null : Buffer.concat(chunks).toString("utf8");
 }
 
 function homePage(marks: ReturnType<typeof listMarks>, visitorId: string, lastName: string): string {
@@ -46,11 +49,12 @@ function homePage(marks: ReturnType<typeof listMarks>, visitorId: string, lastNa
     <label for="body">Your mark</label>
     <textarea id="body" name="body" required maxlength="${MAX_BODY}" rows="2"></textarea>
   </p>
+  ${drawField}
   <button type="submit">Leave it</button>
 </form>
 ${marksList(marks, visitorId)}
 </main>
-${liveScript}`,
+${pageScript}`,
   );
 }
 
@@ -69,11 +73,28 @@ const server = createServer((req, res) => {
 
       if (req.method === "POST" && url.pathname === "/") {
         const raw = await readBody(req);
+        if (raw === null) {
+          res.writeHead(413, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("that mark is too large");
+          return;
+        }
         const params = new URLSearchParams(raw);
         const name = (params.get("name") ?? "").trim().slice(0, MAX_NAME);
-        const body = (params.get("body") ?? "").trim().slice(0, MAX_BODY);
-        if (hasVisibleContent(name) && hasVisibleContent(body)) {
-          broadcast(insertMark(visitorId, name, body));
+        const trimmed = (params.get("body") ?? "").trim().slice(0, MAX_BODY);
+        const body = hasVisibleContent(trimmed) ? trimmed : "";
+        // Only the canvas script fills this field, so anything that doesn't
+        // parse is tampering or a bug: refuse the whole mark, don't drop the
+        // drawing quietly.
+        const drawingRaw = params.get("drawing") ?? "";
+        const drawing = drawingRaw === "" ? null : parseDrawing(drawingRaw);
+        if (drawingRaw !== "" && drawing === null) {
+          res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("that drawing isn't one this wall can show");
+          return;
+        }
+        // a mark is a name plus some text, a drawing, or both
+        if (hasVisibleContent(name) && (body || drawing)) {
+          broadcast(insertMark(visitorId, name, body, drawing && JSON.stringify(drawing)));
           setCookie(res, "name", name);
         }
         res.writeHead(303, { Location: "/" });
